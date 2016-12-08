@@ -271,6 +271,7 @@ proc transformImportAs(c: PContext; n: PNode): tuple[node: PNode, importHidden: 
   return ret
 
 proc myImportModule(c: PContext, n: var PNode, importStmtResult: PNode): PSym =
+  pushInfoContext(c.config, n.info)
   let transf = transformImportAs(c, n)
   n = transf.node
   let f = checkModuleName(c.config, n)
@@ -307,6 +308,7 @@ proc myImportModule(c: PContext, n: var PNode, importStmtResult: PNode): PSym =
     suggestSym(c.graph, n.info, result, c.graph.usageSym, false)
     importStmtResult.add newSymNode(result, n.info)
     #newStrNode(toFullPath(c.config, f), n.info)
+  popInfoContext(c.config)
 
 proc afterImport(c: PContext, m: PSym) =
   # fixes bug #17510, for re-exported symbols
