@@ -1,0 +1,10 @@
+goto	dfa.html#goto	InstrKind.goto	
+loop	dfa.html#loop	InstrKind.loop	
+fork	dfa.html#fork	InstrKind.fork	
+def	dfa.html#def	InstrKind.def	
+use	dfa.html#use	InstrKind.use	
+InstrKind	dfa.html#InstrKind	dfa: InstrKind	
+Instr	dfa.html#Instr	dfa: Instr	
+ControlFlowGraph	dfa.html#ControlFlowGraph	dfa: ControlFlowGraph	
+echoCfg	dfa.html#echoCfg,ControlFlowGraph,int,int	dfa: echoCfg(c: ControlFlowGraph; start = 0; last = -1)	
+constructCfg	dfa.html#constructCfg,PSym,PNode,PSym	dfa: constructCfg(s: PSym; body: PNode; root: PSym): ControlFlowGraph	
