@@ -394,7 +394,10 @@ proc transformYield(c: PTransf, n: PNode): PNode =
     case lhs.kind
     of nkSym:
       internalAssert c.graph.config, lhs.sym.kind == skForVar
-      result = newAsgnStmt(c, nkFastAsgn, lhs, rhs, false)
+      let v = newNode(nkVarSection)
+      addVar(v, copyTree(lhs)) # declare new vars
+      result = newTree(nkStmtList, v,
+                       newAsgnStmt(c, nkFastAsgn, lhs, rhs, false))
     of nkDotExpr:
       result = newAsgnStmt(c, nkAsgn, lhs, rhs, false)
     else:
@@ -769,7 +772,8 @@ proc transformFor(c: PTransf, n: PNode): PNode =
     else:
       if n[i].kind == nkSym and isSimpleIteratorVar(c, iter, call, n[i].sym.owner):
         incl n[i].sym.flags, sfCursor
-      addVar(v, copyTree(n[i])) # declare new vars
+      if n[i].kind != nkSym: # XXX: Can there be not nkSym here?
+        addVar(v, copyTree(n[i])) # declare new vars
   stmtList.add(v)
 
 
