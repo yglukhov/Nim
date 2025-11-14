@@ -1,0 +1,13 @@
+nimTitle	ast2nif	ast2nif.html	module ast2nif		0
+nim	ParsedSymName	ast2nif.html#ParsedSymName	object ParsedSymName		143
+nim	parseSymName	ast2nif.html#parseSymName,string	proc parseSymName(s: string): ParsedSymName		148
+nim	writeNifModule	ast2nif.html#writeNifModule,ConfigRef,int32,PNode	proc writeNifModule(config: ConfigRef; thisModule: int32; n: PNode)		451
+nim	firstSon	ast2nif.html#firstSon,Cursor	proc firstSon(n: Cursor): Cursor		504
+nim	DecodeContext	ast2nif.html#DecodeContext	object DecodeContext		537
+nim	createDecodeContext	ast2nif.html#createDecodeContext,ConfigRef,IdentCache	proc createDecodeContext(config: ConfigRef; cache: IdentCache): DecodeContext		546
+nim	isStub	ast2nif.html#isStub,PType	proc isStub(t: PType): bool		655
+nim	isStub	ast2nif.html#isStub,PSym	proc isStub(s: PSym): bool		656
+nim	loadType	ast2nif.html#loadType,DecodeContext,PType	proc loadType(c: var DecodeContext; t: PType)		695
+nim	loadSym	ast2nif.html#loadSym,DecodeContext,PSym	proc loadSym(c: var DecodeContext; s: PSym)		744
+nim	loadNifModule	ast2nif.html#loadNifModule,DecodeContext,FileIndex	proc loadNifModule(c: var DecodeContext; f: FileIndex): PNode		898
+nimgrp	isstub	ast2nif.html#isStub-procs-all	proc		655

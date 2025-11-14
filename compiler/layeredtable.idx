@@ -1,0 +1,13 @@
+nimTitle	layeredtable	layeredtable.html	module layeredtable		0
+nim	LayeredIdTableObj	layeredtable.html#LayeredIdTableObj	object LayeredIdTableObj		5
+nim	LayeredIdTable	layeredtable.html#LayeredIdTable	type LayeredIdTable		22
+nim	initLayeredTypeMap	layeredtable.html#initLayeredTypeMap,sinkTypeMapping	proc initLayeredTypeMap(pt: sink TypeMapping = initTypeMapping()): LayeredIdTable		24
+nim	shallowCopy	layeredtable.html#shallowCopy,LayeredIdTableObj	proc shallowCopy(pt: LayeredIdTable): LayeredIdTable		27
+nim	currentLen	layeredtable.html#currentLen,LayeredIdTableObj	proc currentLen(pt: LayeredIdTable): int		33
+nim	newTypeMapLayer	layeredtable.html#newTypeMapLayer,LayeredIdTableObj	proc newTypeMapLayer(pt: LayeredIdTable): LayeredIdTable		38
+nim	setToPreviousLayer	layeredtable.html#setToPreviousLayer,LayeredIdTableObj	proc setToPreviousLayer(pt: var LayeredIdTable)		46
+nim	pairs	layeredtable.html#pairs.i,LayeredIdTableObj	iterator pairs(pt: LayeredIdTable): (ItemId, PType)		57
+nim	lookup	layeredtable.html#lookup.t,ref.LayeredIdTableObj,PType	template lookup(typeMap: ref LayeredIdTableObj; key: PType): PType		74
+nim	lookup	layeredtable.html#lookup.t,LayeredIdTableObj,PType	template lookup(typeMap: LayeredIdTableObj; key: PType): PType		84
+nim	put	layeredtable.html#put.t,LayeredIdTableObj,PType,PType	template put(typeMap: var LayeredIdTable; key, value: PType)		90
+nimgrp	lookup	layeredtable.html#lookup-templates-all	template		74
