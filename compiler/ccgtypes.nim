@@ -868,6 +868,7 @@ proc getTypeDescAux(m: BModule; origTyp: PType, check: var IntSet; kind: TypeDes
     if kind == dkRefParam or kind == dkRefGenericParam and origTyp.kind == tyGenericInst:
       result.add("&")
     return
+  doAssert(t != nil)
   case t.kind
   of tyRef, tyPtr, tyVar, tyLent:
     var star = if t.kind in {tyVar} and tfVarIsPtr notin origTyp.flags and
