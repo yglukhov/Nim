@@ -164,6 +164,7 @@ type
     g: ModuleGraph
     fn: PSym
     tmpResultSym: PSym # Used when we return, but finally has to interfere
+    unliftedResultSym: PSym # This is what final state returns
     finallyPathSym: PSym
     curExcSym: PSym # Current exception
     externExcSym: PSym # Extern exception: what would getCurrentException() return outside of closure iter
@@ -171,6 +172,7 @@ type
     states: seq[State] # The resulting states. Label is int literal.
     finallyPathStack: seq[FinallyTarget] # Stack of split blocks, whiles and finallies
     stateLoopLabel: PSym # Label to break on, when jumping between states.
+    finalStateLabel: PNode # 
     tempVarId: int # unique name counter
     hasExceptions: bool # Does closure have yield in try?
     curExcLandingState: PNode
@@ -214,6 +216,15 @@ proc newTmpResultAccess(ctx: var Ctx): PNode =
   if ctx.tmpResultSym.isNil:
     ctx.tmpResultSym = ctx.newEnvVar(":tmpResult", ctx.fn.typ.returnType)
   ctx.newEnvVarAccess(ctx.tmpResultSym)
+
+proc newUnliftedResultAccess(ctx: var Ctx): PNode =
+  if ctx.unliftedResultSym == nil:
+    ctx.unliftedResultSym = newSym(skVar, getIdent(ctx.g.cache, ":unliftedResult"), ctx.idgen, ctx.fn, ctx.fn.info)
+    ctx.unliftedResultSym.typ = ctx.fn.typ.returnType
+  newSymNode(ctx.unliftedResultSym, ctx.fn.info)
+  # if ctx.tmpResultSym.isNil:
+  #   ctx.tmpResultSym = ctx.newEnvVar(":unliftedResult", ctx.fn.typ.returnType)
+  # ctx.newEnvVarAccess(ctx.tmpResultSym)
 
 proc newArrayType(g: ModuleGraph; len: PNode, t: PType; idgen: IdGenerator; owner: PSym): PType =
   result = newType(tyArray, idgen, owner)
@@ -862,7 +873,7 @@ proc newEndFinallyNode(ctx: var Ctx, info: TLineInfo): PNode =
   retStmt.flags.incl(nfNoRewrite)
 
   let ifBody = newTree(nkIfStmt,
-                       newTree(nkElifBranch, excNilCmp, retStmt),
+                       newTree(nkElifBranch, excNilCmp, newTree(nkStmtList, ctx.newRestoreExternException(), retStmt)),
                        newTree(nkElse,
                            newTree(nkStmtList,
                                    newTreeI(nkRaiseStmt, info, ctx.g.emptyNode))))
@@ -926,8 +937,6 @@ proc transformReturnStmt(ctx: var Ctx, n: PNode): PNode =
   # Returns prevent exception propagation
   result.add(ctx.newNullifyCurExc(n.info))
 
-  result.add(ctx.newRestoreExternException())
-
   var finallyChain = newSeq[PNode]()
 
   for i in countdown(ctx.finallyPathStack.high, 0):
@@ -949,8 +958,15 @@ proc transformReturnStmt(ctx: var Ctx, n: PNode): PNode =
 
     result.add(ctx.newJumpAlongFinallyChain(finallyChain, n.info))
   else:
-    # There are no (split) finallies on the path, so we can return right away
-    result.add(n)
+    # There are no (split) finallies on the path, so we jump to final state
+    if n[0].kind != nkEmpty:
+      # Store result in in proc implicit result variable
+      let asgnTmpResult = newNodeI(nkAsgn, n.info)
+      asgnTmpResult.add(ctx.newUnliftedResultAccess())
+      let x = if n[0].kind in {nkAsgn, nkFastAsgn, nkSinkAsgn}: n[0][1] else: n[0]
+      asgnTmpResult.add(x)
+      result.add(asgnTmpResult)
+    result.add(newTree(nkGotoState, ctx.finalStateLabel))
 
 proc transformBreaksAndReturns(ctx: var Ctx, n: PNode): PNode =
   result = n
@@ -960,7 +976,8 @@ proc transformBreaksAndReturns(ctx: var Ctx, n: PNode): PNode =
   # of nkContinueStmt: # By this point all relevant continues should be
   # lowered to breaks in transf.nim.
   of nkReturnStmt:
-    if ctx.curFinallyLevel > 0 and nfNoRewrite notin n.flags:
+    # if ctx.curFinallyLevel > 0 and nfNoRewrite notin n.flags:
+    if nfNoRewrite notin n.flags:
       result = ctx.transformReturnStmt(n)
   else:
     for i in 0..<n.len:
@@ -1278,6 +1295,9 @@ proc wrapIntoStateLoop(ctx: var Ctx, n: PNode): PNode =
   blockStmt.add(blockBody)
   loopBody.add(blockStmt)
 
+  result = newTreeI(nkStmtList, n.info,
+                    ctx.newTempVarDef(ctx.unliftedResultSym, nil),
+                    result)
   if ctx.hasExceptions:
     # Since we have yields in tries, we must switch current exception
     # between the iter and "outer world"
@@ -1396,7 +1416,7 @@ proc detectCapturedVars(c: var Ctx, n: PNode, stateIdx: int) =
   case n.kind
   of nkSym:
     let s = n.sym
-    if s.kind in {skResult, skVar, skLet, skForVar, skTemp} and sfGlobal notin s.flags and s.owner == c.fn and s != c.externExcSym:
+    if s.kind in {skResult, skVar, skLet, skForVar, skTemp} and sfGlobal notin s.flags and s.owner == c.fn and s != c.externExcSym and s != c.unliftedResultSym:
       let vs = c.varStates.getOrDefault(s.itemId, localNotSeen)
       if vs == localNotSeen: # First seing this variable
         c.varStates[s.itemId] = stateIdx
@@ -1474,8 +1494,8 @@ proc transformClosureIterator*(g: ModuleGraph; idgen: IdGenerator; fn: PSym, n: 
 
   discard ctx.newState(n, false, nil)
 
-  let finalState = ctx.newStateLabel()
-  let gotoOut = newTree(nkGotoState, finalState)
+  ctx.finalStateLabel = ctx.newStateLabel()
+  let gotoOut = newTree(nkGotoState, ctx.finalStateLabel)
 
   var ns = false
   n = ctx.lowerStmtListExprs(n, ns)
@@ -1490,8 +1510,13 @@ proc transformClosureIterator*(g: ModuleGraph; idgen: IdGenerator; fn: PSym, n: 
   let finalStateBody = newTree(nkStmtList)
   if ctx.hasExceptions:
     finalStateBody.add(ctx.newRestoreExternException())
-  finalStateBody.add(newTree(nkGotoState, g.newIntLit(n.info, -1)))
-  discard ctx.newState(finalStateBody, true, finalState)
+  finalStateBody.add(ctx.newStateAssgn(g.newIntLit(n.info, -1)))
+  finalStateBody.add(newTree(nkReturnStmt, 
+                   newTree(nkFastAsgn,
+                           newSymNode(getClosureIterResult(ctx.g, ctx.fn, ctx.idgen), n.info),
+                           ctx.newUnliftedResultAccess())))
+  # finalStateBody.add(newTree(nkGotoState, g.newIntLit(n.info, -1)))
+  discard ctx.newState(finalStateBody, true, ctx.finalStateLabel)
 
   # Assign state label indexes
   for i in 0 .. ctx.states.high:
@@ -1515,7 +1540,7 @@ proc transformClosureIterator*(g: ModuleGraph; idgen: IdGenerator; fn: PSym, n: 
   result = wrapIntoStateLoop(ctx, caseDispatcher)
   result = liftLocals(ctx, result)
 
-  when false:
+  when true:
     echo "TRANSFORM TO STATES:"
     echo renderTree(result)
 

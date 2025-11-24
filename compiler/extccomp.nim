@@ -985,6 +985,7 @@ proc callCCompiler*(conf: ConfigRef) =
     # call the C compiler for the .c file:
     if CfileFlag.Cached in it.flags: continue
     let compileCmd = getCompileCFileCmd(conf, it, idx == conf.toCompile.len - 1, produceOutput=true)
+    discard execCmd("clang-format -i " & $it.cname)
     if optCompileOnly notin conf.globalOptions:
       cmds.add(compileCmd)
       prettyCmds.add displayProgressCC(conf, $it.cname, compileCmd)
