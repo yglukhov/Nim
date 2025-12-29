@@ -42,13 +42,13 @@ proc initCandidateSymbols(c: PContext, headSymbol: PNode,
                           filter: TSymKinds,
                           best, alt: var TCandidate,
                           o: var TOverloadIter,
-                          diagnostics: bool): seq[tuple[s: PSym, scope: int]] =
+                          diagnostics: bool): seq[tuple[s: PSym, scope: int, isDefSite: bool]] =
   ## puts all overloads into a seq and prepares best+alt
   result = @[]
   var symx = initOverloadIter(o, c, headSymbol)
   while symx != nil:
     if symx.kind in filter:
-      result.add((symx, o.lastOverloadScope))
+      result.add((symx, o.lastOverloadScope, o.inDefSitePart))
     elif symx.kind == skGenericParam:
       #[
         This code handles looking up a generic parameter when it's a static callable.
@@ -59,14 +59,14 @@ proc initCandidateSymbols(c: PContext, headSymbol: PNode,
       for paramSym in searchScopesAll(c, symx.name, {skConst}):
         let paramTyp = paramSym.typ
         if paramTyp.n.kind == nkSym and paramTyp.n.sym.kind in filter:
-          result.add((paramTyp.n.sym, o.lastOverloadScope))
+          result.add((paramTyp.n.sym, o.lastOverloadScope, o.inDefSitePart))
 
     symx = nextOverloadIter(o, c, headSymbol)
   if result.len > 0:
     best = initCandidate(c, result[0].s, initialBinding,
-                  result[0].scope, diagnostics)
+                  result[0].scope, diagnostics, result[0].isDefSite)
     alt = initCandidate(c, result[0].s, initialBinding,
-                  result[0].scope, diagnostics)
+                  result[0].scope, diagnostics, result[0].isDefSite)
     best.state = csNoMatch
 
 proc isAttachableRoutineTo(prc: PSym, arg: PType): bool =
@@ -84,7 +84,7 @@ proc isAttachableRoutineTo(prc: PSym, arg: PType): bool =
 
 proc addTypeBoundSymbols(graph: ModuleGraph, arg: PType, name: PIdent,
                          filter: TSymKinds, marker: var IntSet,
-                         syms: var seq[tuple[s: PSym, scope: int]]) =
+                         syms: var seq[tuple[s: PSym, scope: int, isDefSite: bool]]) =
   # add type bound ops for `name` based on the argument type `arg`
   if arg != nil:
     # argument must be typed first, meaning arguments always
@@ -99,7 +99,8 @@ proc addTypeBoundSymbols(graph: ModuleGraph, arg: PType, name: PIdent,
         if s.kind in filter and s.isAttachableRoutineTo(t) and
             not containsOrIncl(marker, s.id):
           # least priority scope, less than explicit imports:
-          syms.add((s, -2))
+          # type bound ops are found at instantiation-site, not definition-site
+          syms.add((s, -2, false))
         s = nextModuleIter(iter, graph)
 
 proc pickBestCandidate(c: PContext, headSymbol: PNode,
@@ -131,6 +132,7 @@ proc pickBestCandidate(c: PContext, headSymbol: PNode,
   var sym = syms[0].s
   let name = sym.name
   var scope = syms[0].scope
+  var isDefSite = syms[0].isDefSite
 
   if allowTypeBoundOps:
     for a in 1 ..< n.len:
@@ -143,7 +145,7 @@ proc pickBestCandidate(c: PContext, headSymbol: PNode,
   var z: TCandidate # current candidate
   while true:
     determineType(c, sym)
-    z = initCandidate(c, sym, initialBinding, scope, diagnosticsFlag)
+    z = initCandidate(c, sym, initialBinding, scope, diagnosticsFlag, isDefSite)
     # this is kinda backwards as without a check here the described
     # problems in recalc would not happen, but instead it 100%
     # does check forever in some cases
@@ -212,6 +214,7 @@ proc pickBestCandidate(c: PContext, headSymbol: PNode,
     # advance to next sym
     sym = syms[nextSymIndex].s
     scope = syms[nextSymIndex].scope
+    isDefSite = syms[nextSymIndex].isDefSite
     inc(nextSymIndex)
 
 

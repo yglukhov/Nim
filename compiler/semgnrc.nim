@@ -320,9 +320,13 @@ proc semGenericStmt(c: PContext, n: PNode,
     if s != nil:
       incl(s.flagsImpl, sfUsed)
       mixinContext = s.magic in {mDefined, mDeclared, mDeclaredInScope, mCompiles, mAstToStr}
-      let whichChoice = if s.id in ctx.toBind: scClosed
+      var whichChoice = if s.id in ctx.toBind: scClosed
                         elif s.isMixedIn: scForceOpen
                         else: scOpen
+      # For templates/macros, use scForceOpen to enable fallback to instantiation-site
+      # symbols when definition-site symbols don't match. See #3542, #20100
+      if s.kind in {skMacro, skTemplate} and whichChoice == scOpen:
+        whichChoice = scForceOpen
       let sc = symChoice(c, fn, s, whichChoice)
       case s.kind
       of skMacro, skTemplate:

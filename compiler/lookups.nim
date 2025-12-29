@@ -336,6 +336,8 @@ type
     m*: PSym
     mode*: TOverloadIterMode
     symChoiceIndex*: int
+    defSiteSymCount*: int  # number of definition-site symbols in open sym choice
+    inDefSitePart*: bool  # true if last returned symbol was from definition-site part
     currentScope: PScope
     importIdx: int
     marked: IntSet
@@ -785,6 +787,8 @@ proc initOverloadIter*(o: var TOverloadIter, c: PContext, n: PNode): PSym =
       o.mode = oimDone
       return nil
     o.symChoiceIndex = 1
+    o.defSiteSymCount = n.len  # all symbols in the node are from definition-site
+    o.inDefSitePart = true  # first symbol is from definition-site
     o.marked = initIntSet()
     incl(o.marked, result.id)
   else: result = nil
@@ -861,9 +865,11 @@ proc nextOverloadIter*(o: var TOverloadIter, c: PContext, n: PNode): PSym =
       result = n[o.symChoiceIndex].sym
       incl(o.marked, result.id)
       inc o.symChoiceIndex
+      # still in definition-site part
     elif n.kind == nkOpenSymChoice:
       # try 'local' symbols too for Koenig's lookup:
       o.mode = oimSymChoiceLocalLookup
+      o.inDefSitePart = false  # now returning instantiation-site symbols
       o.currentScope = c.currentScope
       result = firstIdentExcluding(o.it, o.currentScope.symbols,
                                    n[0].sym.name, o.marked)

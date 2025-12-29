@@ -56,6 +56,7 @@ type
     calleeSym*: PSym         # may be nil
     calleeScope*: int        # scope depth:
                              # is this a top-level symbol or a nested proc?
+    isDefinitionSite*: bool  # true if symbol is from definition-site (for open sym choice)
     call*: PNode             # modified call
     bindings*: LayeredIdTable # maps types to types
     magic*: TMagic           # magic of operation
@@ -244,13 +245,15 @@ proc copyingEraseVoidParams(m: TCandidate, t: var PType) =
 
 proc initCandidate*(ctx: PContext, callee: PSym,
                     binding: PNode, calleeScope = -1,
-                    diagnosticsEnabled = false): TCandidate =
+                    diagnosticsEnabled = false,
+                    isDefinitionSite = false): TCandidate =
   result = initCandidateAux(ctx, callee.typ)
   result.calleeSym = callee
   if callee.kind in skProcKinds and calleeScope == -1:
     result.calleeScope = cmpScopes(ctx, callee)
   else:
     result.calleeScope = calleeScope
+  result.isDefinitionSite = isDefinitionSite
   result.diagnostics = @[] # if diagnosticsEnabled: @[] else: nil
   result.diagnosticsEnabled = diagnosticsEnabled
   result.magic = result.calleeSym.magic
@@ -431,6 +434,11 @@ proc cmpCandidates*(a, b: TCandidate, isFormal=true): int =
     # prefer more specialized generic over more general generic:
     result = complexDisambiguation(a.callee, b.callee)
   if result != 0: return
+  # prefer definition-site symbols over instantiation-site symbols (for open sym choice)
+  # see #3542, #20100
+  if a.isDefinitionSite != b.isDefinitionSite:
+    result = if a.isDefinitionSite: 1 else: -1
+    return
   # only as a last resort, consider scoping:
   result = a.calleeScope - b.calleeScope
 
